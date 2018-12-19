@@ -1,0 +1,128 @@
+
+-- THIS DAILY TOTALS TABLE - PROVIDES AN OVERVIEW OF TOTAL SITEWIDE TRAFFIC WITH DE-DUPLICATED UNIQUE VISITORS ACROSS THE DAY. WHEN USING THIS IN DATA STUDIO - YOU SHOULD ONLY USE UNIQUE VISITOR METRICS WHEN BROKEN DOWN BY DAY. USE THE MONTH TO DATE TABLES FOR MTD VS LM NUMBERS. THE TOTALS ARE AS IN LINE WITH THE PULSE DASHBOARD AS POSSIBLE. THEY INCLUDE ALL TRAFFIC, REGISTRATIONS AND SUBSCRIPTIONS IN ADOBE - INCLUDING INDEX PAGES, EXCLUDING SPONSORED CONTENT ONLY.
+
+
+WITH traffic AS (
+-- UNGROUPED TRAFFIC METRIC TABLE - KEY TRAFFIC METRICS, WITH USER_STATE, REFERRER AND COUNTRY SPLIT. 
+SELECT 
+
+    DATE_TRUNC(DATE(date_time), DAY) AS Date,
+    CONCAT(post_visid_high, post_visid_low) AS cookies,    
+    CONCAT(mcvisid, visit_num, visit_start_time_gmt) AS Visits,
+    post_page_event AS Page_Views,
+    CASE WHEN LOWER(post_evar10) LIKE '%subs%' THEN 'subscriber' WHEN LOWER(post_evar10) LIKE '%reg%' THEN 'registrant' WHEN LOWER(post_evar10) LIKE '%anon%' THEN 'anonymous' END AS User_State,
+    CASE WHEN LOWER(post_evar10) LIKE '%in%' THEN 'logged_in' WHEN LOWER(post_evar10) LIKE '%out%' THEN 'logged_out' END AS Logged_in_State,
+    CASE WHEN lower(geo_country) = 'gbr'  THEN 'uk' ELSE 'international' END AS Geo,
+    CASE WHEN va_closer_id = '2' THEN 'seo'  WHEN va_closer_id = '8' THEN 'social' ELSE 'other' END AS Referrer  
+    
+    FROM    
+       `tmg-datalake.adobe_desktop_edition_logs.desktop_hitlog_extended_*`    
+        WHERE    
+        (_TABLE_SUFFIX = REPLACE(CAST(DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY) AS STRING), '-', ''))    
+        AND (post_evar15 <> 'secure'       
+        AND post_evar21 <> 'sponsored')    
+        AND exclude_hit <= '0'    
+        AND hit_source NOT IN ('5', '8', '9')   
+        AND post_page_event = '0'   
+    
+                ),
+           
+event_list AS   (
+-- UNGROUPED ALL EVENT COUNTS WITH USER_STATE AND COUNTRY SPLITS. All EVENTS NON SPONSORED BUT NOT HAVE EDITORIAL FILTERS ON THEM. WITH USER_STATE, REFERRER AND COUNTRY SPLIT. REGISTRATIONS AND SUBSCRIPTIONS WHERE THEY CAN BE ASSIGNED TO AN EDTIORIAL NON SPONSORED ARTICLE - IN LINE WITH SUBSCRIPTIONS & REGISTRATIONS TARGET.
+SELECT
+   
+     DATE_TRUNC(DATE(date_time), DAY) AS Date,
+     CASE WHEN CONCAT( ',', post_event_list, ',') LIKE '%,245,%' AND post_evar73 IS NOT NULL THEN 1 ELSE 0 END AS subscriptions,
+     CASE WHEN CONCAT( ',', post_event_list, ',') LIKE '%,221,%' AND post_evar139 IS NOT NULL THEN 1 ELSE 0 END AS registrations,
+     CASE WHEN CONCAT( ',', post_event_list, ',') LIKE '%,269,%' THEN 1 ELSE 0 END AS video_plays,
+     CASE WHEN CONCAT( ',', post_event_list, ',') LIKE '%,274,%' THEN 1 ELSE 0 END AS video_complete,
+     CASE WHEN CONCAT( ',', post_event_list, ',') LIKE '%,213,%' THEN 1 ELSE 0 END AS newsletter_sign_up,
+     CASE WHEN CONCAT( ',', post_event_list, ',') LIKE '%,20246,%' OR CONCAT( ',', post_event_list, ',') LIKE '%,20247,%' THEN 1 ELSE 0 END  AS comments,
+     CASE WHEN LOWER(post_evar10) LIKE '%subs%' THEN 'subscriber' WHEN LOWER(post_evar10) LIKE '%reg%' THEN 'registrant' WHEN LOWER(post_evar10) LIKE '%anon%' THEN 'anonymous' END AS User_State,
+     CASE WHEN LOWER(post_evar10) LIKE '%in%' THEN 'logged_in' WHEN LOWER(post_evar10) LIKE '%out%' THEN 'logged_out' END AS Logged_in_State,
+     CASE WHEN lower(geo_country) = 'gbr'  THEN 'uk' ELSE 'international' END AS Geo,
+     CASE WHEN va_closer_id = '2' THEN 'seo'  WHEN va_closer_id = '8' THEN 'social' ELSE 'other' END AS referrer  
+    
+    FROM    
+       `tmg-datalake.adobe_desktop_edition_logs.desktop_hitlog_extended_*`    
+        WHERE    
+        (_TABLE_SUFFIX = REPLACE(CAST(DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY) AS STRING), '-', '')) AND post_evar21 <> 'sponsored' 
+   
+            ),
+                       
+registration_targets AS (        
+-- REGISTRATION TARGET TABLE - THESE WILL BE REBUILT IN THE NEW YEAR BUT USE EXISTING REG TARGET AS AN EXAMPLE - THIS CAN BE REMOVED. EDITORIAL_CHANNELS - TOTAL FILTER USED TO SELECT A UNIQUE TARGET FOR SITEWIDE - WHERE SUM OF CHANNEL TARGETS <> SITEWIDE TARGETS.
+    SELECT    
+    D AS Date,    
+    Daily_Reg_Target,    
+    Daily_PV_Target    
+     
+    FROM    
+        `tmg-reporting-dev.devinem.Daily_Editorial_Targets_2018`    
+        WHERE    
+        Editorial_Channels = 'Total' )
+                 
+-- THE QUERIES BELOW AIM TO PULL ALL OF THE ABOVE INTO A SINGLE ROWN PER DAY WITH THE COLUMNS AS ALL KEY METRICS NEEDED. IF YOU NEED TO ADD A METRIC - ADD TO THE RELEVANT TABLE ABOVE BEFORE QUERING BELOW.
+
+TRAFFIC_METRICS AS (
+
+SELECT
+   date,
+--#page_views
+   count(page_views) as global_page_views,
+   SUM(CASE WHEN  Geo = 'uk' THEN 1 ELSE 0 END )AS uk_page_views,
+   SUM(CASE WHEN Logged_in_State = 'logged_in' THEN 1 ELSE 0 END )AS global_logged_in_pv,
+   SUM(CASE WHEN Logged_in_State = 'logged_in' AND Geo = 'uk' THEN 1 ELSE 0 END )AS uk_logged_in_pv,
+   SUM(CASE WHEN User_State = 'subscriber' THEN 1 ELSE 0 END )AS global_subscriber_pv,
+   SUM(CASE WHEN User_State = 'subscriber' AND Geo = 'uk' THEN 1 ELSE 0 END )AS uk_subscriber_pv,
+--#unique_visitors 
+   COUNT(DISTINCT cookies) AS global_unique_visitors,
+   COUNT(DISTINCT CASE WHEN Logged_in_State = 'logged_in'  THEN cookies END) AS logged_in_unique_visitors,
+   COUNT(DISTINCT CASE WHEN Geo = 'uk' AND Logged_in_State = 'logged_in' THEN cookies END) AS uk_loggedin_unique_visitors,
+--#visits
+   COUNT(DISTINCT visits) AS visits,
+   COUNT(DISTINCT CASE WHEN referrer = 'social' THEN visits END) AS social_visits,
+   COUNT(DISTINCT CASE WHEN referrer = 'seo' THEN visits END) AS seo_visits
+   
+   FROM
+        traffic
+        GROUP BY 1 ),
+
+EVENT_COUNTS AS (
+
+SELECT
+    date,
+--#registrations
+    SUM(registrations) AS registrations,
+    SUM(CASE WHEN registrations > 0 AND referrer = 'seo' then 1 END) AS seo_registrations,
+    SUM(CASE WHEN registrations > 0 AND referrer = 'social' then 1 END) AS social_registrations,
+--#subscriptions
+    SUM(subscriptions) AS subscriptions,
+    SUM(CASE WHEN subscriptions > 0 AND referrer = 'seo' then 1 END) AS seo_subscritpions,
+    SUM(CASE WHEN subscriptions > 0 AND referrer = 'social' then 1 END) AS social_subscritpions,
+--#commenting
+    SUM(comments) AS comments,
+    SUM(CASE WHEN comments > 0 AND referrer = 'seo' then 1 END) AS seo_comments,
+    SUM(CASE WHEN comments > 0 AND referrer = 'social' then 1 END) AS social_comments,
+    SUM(CASE WHEN comments > 0 AND User_State = 'subscriber' then 1 END) AS subscriber_comments,
+--#newsletter_signup
+    SUM(newsletter_sign_up) AS newsletter_sign_up,
+    SUM(CASE WHEN newsletter_sign_up > 0 AND referrer = 'seo' then 1 END) AS seo_newsletter_sign_up,
+    SUM(CASE WHEN newsletter_sign_up > 0 AND referrer = 'social' then 1 END) AS social_newsletter_sign_up,
+    SUM(CASE WHEN newsletter_sign_up > 0 AND User_State = 'subscriber' then 1 END) AS subscriber_newsletter_sign_up,
+--#video
+    SUM(video_plays) AS video_plays,
+    SUM(video_complete) AS video_complete
+    
+    FROM
+        event_list
+        GROUP BY 1 )
+                
+-- THE JOIN BELOW AIM TO PULL ALL OF THE ABOVE INTO A SINGLE ROWN PER DAY WITH THE COLUMNS AS ALL KEY METRICS NEEDED. IF YOU NEED TO ADD A METRIC - ADD TO THE RELEVANT TABLE ABOVE BEFORE QUERING BELOW.
+
+        
+        SELECT * from TRAFFIC_METRICS
+        LEFT JOIN
+        EVENT_COUNTS
+        USING (DATE)
+     
