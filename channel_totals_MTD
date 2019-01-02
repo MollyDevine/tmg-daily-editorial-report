@@ -1,0 +1,67 @@
+---THIS QUERY READS FROM THE DAILY SITEWIDE TOTALS TABLE TO GIVE A SUM OF METRICS MONTH TO DATE FOR CURRENT MONTH AND MONTH TO DATE LAST MONTH. THIS IS USED TO CREATE MTD V LM COMPARISON IN DATA STUDIO. BECAUSE THIS IS DEPENDENT ON THE DAILY SITEWIDE TOTALS TABLE, THIS SHOULD BE RUN AFTER THE DAILY SITEWIDE TOTALS TABLE HAS BEEN RUN 
+
+-- THIS QUERY SHOULD OVERWRITE tmg-reporting-dev:Daily_Editorial_Report.Sitewide_Totals_MTD DAILY
+
+SELECT
+  *
+FROM (
+  SELECT
+    DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY) AS date,
+    SUM(global_page_views) AS global_page_views_MTD,
+    SUM(uk_page_views) AS uk_page_views_MTD,
+    SUM(global_logged_in_pv) AS global_logged_in_pv_MTD,
+    SUM(uk_logged_in_pv) AS uk_logged_in_pv_MTD,
+    SUM(global_subscriber_pv) AS global_subscriber_pv_MTD,
+    SUM(uk_subscriber_pv) AS uk_subscriber_pv_MTD,
+    SUM(visits) AS visits_MTD,
+    SUM(social_visits) AS social_visits_MTD,
+    SUM(seo_visits) AS seo_visits_MTD,
+    SUM(regs) AS registrations_MTD,
+    SUM(subs) AS subscriptions_MTD,
+    SUM(comments) AS comments_MTD,
+    SUM(seo_comments) AS seo_comments_MTD,
+    SUM(social_comments) AS social_comments_MTD,
+    SUM(subscriber_comments) AS subscriber_comments_MTD,
+    SUM(newsletter_sign_up) AS newsletter_sign_up_MTD,
+    SUM(seo_newsletter_sign_up) AS seo_newsletter_sign_up_MTD,
+    SUM(social_newsletter_sign_up) AS social_newsletter_sign_up_MTD,
+    SUM(subscriber_newsletter_sign_up) AS subscriber_newsletter_sign_up_MTD,
+    SUM(video_plays) AS video_plays_MTD
+  FROM
+    `tmg-reporting-dev.Daily_Editorial_Report.Channel_Totals`
+  WHERE
+    DATE1 BETWEEN (DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY), MONTH))
+    AND (DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY)) 
+)
+LEFT JOIN (
+  SELECT
+    DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY) AS date,
+    SUM(global_page_views) AS global_page_views_LM,
+    SUM(uk_page_views) AS uk_page_views_LM,
+    SUM(global_logged_in_pv) AS global_logged_in_pv_LM,
+    SUM(uk_logged_in_pv) AS uk_logged_in_pv_LM,
+    SUM(global_subscriber_pv) AS global_subscriber_pv_LM,
+    SUM(uk_subscriber_pv) AS uk_subscriber_pv_LM,
+    SUM(visits) AS visits_LM,
+    SUM(social_visits) AS social_visits_LM,
+    SUM(seo_visits) AS seo_visits_LM,
+    SUM(regs) AS registrations_LM,
+    SUM(subs) AS subscriptions_LM,
+    SUM(comments) AS comments_LM,
+    SUM(seo_comments) AS seo_comments_LM,
+    SUM(social_comments) AS social_comments_LM,
+    SUM(subscriber_comments) AS subscriber_comments_LM,
+    SUM(newsletter_sign_up) AS newsletter_sign_up_LM,
+    SUM(seo_newsletter_sign_up) AS seo_newsletter_sign_up_LM,
+    SUM(social_newsletter_sign_up) AS social_newsletter_sign_up_LM,
+    SUM(subscriber_newsletter_sign_up) AS subscriber_newsletter_sign_up_LM,
+    SUM(video_plays) AS video_plays_LM
+  FROM
+    `tmg-reporting-dev.Daily_Editorial_Report.Channel_Totals`
+  WHERE
+    DATE1 BETWEEN (DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY), MONTH))
+    AND (DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY)) 
+    )
+USING
+  (date)
+        
