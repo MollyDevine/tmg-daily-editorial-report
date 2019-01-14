@@ -31,8 +31,7 @@ FROM (
     `tmg-reporting-dev.Daily_Editorial_Report.Channel_Totals`
   WHERE
     DATE1 BETWEEN (DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY), MONTH))
-    AND (DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY)) 
-)
+    AND (DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY)) )
 LEFT JOIN (
   SELECT
     DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY) AS date,
@@ -60,8 +59,18 @@ LEFT JOIN (
     `tmg-reporting-dev.Daily_Editorial_Report.Channel_Totals`
   WHERE
     DATE1 BETWEEN (DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY), MONTH))
-    AND (DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY)) 
-    )
+    AND (DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY)) )
 USING
+  (date) LEFT JOIN (
+SELECT
+  DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY) AS date,
+  Registration_Monthly_Target,
+  Subs_Monthly_Target
+FROM
+  `tmg-reporting-dev.Daily_Editorial_Report.Editorial_Monthly_Targets`
+WHERE
+  Month = CAST(DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY), MONTH) AS date)
+  AND Editorial_Channel = 'Total_Editorial')
+USING
+
   (date)
-        
